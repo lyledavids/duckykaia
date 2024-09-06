@@ -15,31 +15,101 @@ const NFTArtCreator = () => {
   const [network, setNetwork] = useState(null);
   const [color, setColor] = useState('#000000'); // Default color is black
 
+  // useEffect(() => {
+  //   const setupEthers = async () => {
+  //     if (window.ethereum) {
+  //       try {
+  //         await window.ethereum.request({ method: 'eth_requestAccounts' });
+  //         const provider = new ethers.BrowserProvider(window.ethereum);
+  //         const signer = await provider.getSigner();
+  //         const nftContract = new ethers.Contract(CONTRACT_ADDRESS, NFTArtCreatorABI, signer);
+  //         setContract(nftContract);
+  //         setAccount(await signer.getAddress());
+
+  //         const network = await provider.getNetwork();
+  //         setNetwork(network.name);
+  //       } catch (error) {
+  //         console.error("Failed to connect to Ethereum:", error);
+  //         setError("Failed to connect to Ethereum. Please make sure you're connected to the correct network.");
+  //       }
+  //     } else {
+  //       setError("Please install MetaMask!");
+  //     }
+  //   };
+
+  //   setupEthers();
+  // }, []);
+
   useEffect(() => {
     const setupEthers = async () => {
       if (window.ethereum) {
+        // Define the target network object
+        const targetNetwork = {
+          chainId: '0x3E9', // Kaia Testnet Kairos chain ID (1001 in decimal)
+          chainName: 'Kaia Testnet Kairos',
+          rpcUrls: ['https://public-en.kairos.node.kaia.io'],
+          nativeCurrency: {
+            name: 'KAIA',
+            symbol: 'KAIA',
+            decimals: 18,
+          },
+          blockExplorerUrls: ['https://kairos.kaiascan.io'],
+        };
+  
         try {
-          await window.ethereum.request({ method: 'eth_requestAccounts' });
+          // Check the current network
           const provider = new ethers.BrowserProvider(window.ethereum);
+          const currentNetwork = await provider.getNetwork();
+  
+          if (currentNetwork.chainId !== parseInt(targetNetwork.chainId, 16)) {
+            // If the current network is not the target network, request network switch
+            await window.ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: targetNetwork.chainId }],
+            });
+          }
+  
+          // Request account access if not already connected
+          await window.ethereum.request({ method: 'eth_requestAccounts' });
+  
+          // Continue with setting up the contract and account
           const signer = await provider.getSigner();
           const nftContract = new ethers.Contract(CONTRACT_ADDRESS, NFTArtCreatorABI, signer);
           setContract(nftContract);
           setAccount(await signer.getAddress());
-
+  
           const network = await provider.getNetwork();
           setNetwork(network.name);
         } catch (error) {
-          console.error("Failed to connect to Ethereum:", error);
-          setError("Failed to connect to Ethereum. Please make sure you're connected to the correct network.");
+          if (error.code === 4902) {
+            // If the network is not added to MetaMask, prompt the user to add it
+            try {
+              await window.ethereum.request({
+                method: 'wallet_addEthereumChain',
+                params: [targetNetwork],
+              });
+            } catch (addError) {
+              console.error("Failed to add the network to MetaMask:", addError);
+              setError("Failed to add the network to MetaMask. Please add it manually.");
+            }
+          } else if (error.code === 4001) {
+            // User rejected the request
+            setError("Please connect to the correct network and try again.");
+          } else {
+            console.error("Failed to connect to Kaia:", error);
+            setError("Failed to connect to Kaia. Please make sure you're connected to the correct network.");
+          }
         }
       } else {
         setError("Please install MetaMask!");
       }
     };
-
+  
     setupEthers();
   }, []);
-
+  
+  
+  
   const startDrawing = (event) => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
